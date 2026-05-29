@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Genera il DOCUMENTO DI INFORMAZIONE ALLE DITTE (art. 26 c.1 lett. b D.Lgs. 81/08)
-per le attivita' presso il BACINO FERRATI dell'Arsenale Militare Marittimo di Taranto:
+Genera il DOCUMENTO DI INFORMAZIONE ALLE DITTE (D.Lgs. 81/08 - Titolo IV, cantieri
+temporanei o mobili) per le attivita' presso il BACINO FERRATI dell'Arsenale
+Militare Marittimo di Taranto:
 - Fasc. 2511/25 Ord. 1 : taglio e rimozione barche porta GP65 e GP59
 - Fasc. 2509/25 Ord. 6 : pulizia platea bacino da fanghi e acque
 Struttura mutuata dal Fascicolo 2508.25 (stesso format SPP Marinarsen) e arricchita
@@ -136,7 +137,7 @@ htbl = header.add_table(rows=1, cols=3, width=Cm(17))
 htbl.style = "Table Grid"
 hc = htbl.rows[0].cells
 cell_text(hc[0], "Redatto a cura del:\nServizio Prevenzione e Protezione\nArsenale M.M. Taranto", size=8, align=WD_ALIGN_PARAGRAPH.LEFT)
-cell_text(hc[1], "DOCUMENTO DI\nINFORMAZIONE ALLE DITTE\n- D.Lgs. 81/2008 Art. 26 comma 1 lett. b -", bold=True, size=8.5, align=WD_ALIGN_PARAGRAPH.CENTER, color=NAVY)
+cell_text(hc[1], "DOCUMENTO DI\nINFORMAZIONE ALLE DITTE\n- D.Lgs. 81/2008 - Titolo IV -", bold=True, size=8.5, align=WD_ALIGN_PARAGRAPH.CENTER, color=NAVY)
 cell_text(hc[2], "29 Maggio 2026\nBacino Ferrati (C22B)\nFasc. 2511/25 - 2509/25", size=8, align=WD_ALIGN_PARAGRAPH.RIGHT)
 
 footer = section.footer
@@ -156,7 +157,7 @@ add_para("TARANTO", bold=True, size=18, color=NAVY, align=WD_ALIGN_PARAGRAPH.CEN
 add_para("MARINARSEN", bold=False, size=11, color=GREY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=18)
 
 add_para("DOCUMENTO DI INFORMAZIONE ALLE DITTE", bold=True, size=16, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
-add_para("ai sensi dell'art. 26, comma 1, lettera b) del D.Lgs. 81/2008 e s.m.i.", italic=True, size=11, color=GREY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=18)
+add_para("redatto nell'ambito del Titolo IV del D.Lgs. 81/2008 e s.m.i. (cantieri temporanei o mobili)", italic=True, size=11, color=GREY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=18)
 
 add_para("OGGETTO", bold=True, size=12, color=NAVY, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
 add_para(
@@ -198,25 +199,30 @@ doc.add_page_break()
 # ====================================================================
 doc.add_heading("PREMESSA", level=1)
 add_para(
-    "Lo scopo del presente documento e' quello di fornire le informazioni, ai sensi dell'art. 26 comma 1 "
-    "lettera b) del D.Lgs. 81/2008 e s.m.i., relative ai luoghi di lavoro oggetto del contratto e dipendenti "
-    "dal Datore di lavoro di Marinarsen Taranto, nonche' gli elementi essenziali di conoscenza "
-    "dell'organizzazione interna dell'Arsenale Militare Marittimo di Taranto."
+    "Le attivita' oggetto del presente documento ricadono nel campo di applicazione del Titolo IV del D.Lgs. "
+    "81/2008 e s.m.i. (cantieri temporanei o mobili). Per tali lavorazioni il Committente ha provveduto, ai "
+    "sensi degli artt. 90 e 91 del D.Lgs. 81/2008, alla designazione del Coordinatore per la Sicurezza in fase "
+    "di Progettazione ed Esecuzione (CSP/CSE) nella persona dell'Ing. Vincenzo Marasciulo della Societa' "
+    "Italiana S.r.l. e alla redazione del Piano di Sicurezza e Coordinamento (PSC_Ferrati Rev. 5)."
 )
 add_para(
-    "Le attivita' ricadono nel campo di applicazione del Titolo IV del D.Lgs. 81/2008 (cantieri temporanei o "
-    "mobili), con Coordinamento della Sicurezza in fase di Progettazione ed Esecuzione (CSP/CSE) affidato "
-    "all'Ing. Vincenzo Marasciulo della Societa' Italiana S.r.l. Le lavorazioni costituiscono la prosecuzione, "
-    "per scelta condivisa, di quelle gia' effettuate per la pulizia del bacino dalle taccate in legno e in "
-    "calcestruzzo. Il presente documento informativo integra e non sostituisce il Piano di Sicurezza e "
-    "Coordinamento (PSC_Ferrati Rev. 5) e i Piani Operativi di Sicurezza (POS) delle singole imprese."
+    "Trattandosi di lavori soggetti al Titolo IV, gli obblighi di cui all'art. 26 commi 1, 2 e 3 del D.Lgs. "
+    "81/2008 (ivi compresa la redazione del DUVRI) non trovano applicazione, ai sensi dell'art. 26 comma 3-bis: "
+    "la gestione dei rischi interferenziali e' assicurata dal PSC e dall'azione di coordinamento del CSE. Scopo "
+    "del presente documento e' fornire alle imprese affidatarie ed esecutrici le informazioni relative ai "
+    "luoghi di lavoro dipendenti dal Datore di lavoro di Marinarsen Taranto, ai rischi specifici esistenti "
+    "nell'ambiente di lavoro e alle misure di emergenza adottate, nonche' gli elementi essenziali di "
+    "conoscenza dell'organizzazione interna dell'Arsenale Militare Marittimo di Taranto, a integrazione e non "
+    "in sostituzione del PSC e dei Piani Operativi di Sicurezza (POS) delle singole imprese."
 )
 add_para(
-    "Ai sensi dell'art. 26 comma 3 del D.Lgs. 81/2008, le Ditte affidatarie ed esecutrici sono tenute a "
-    "partecipare alle riunioni di coordinamento indette dal CSE e a prendere visione del PSC e del relativo "
-    "cronoprogramma, il cui aggiornamento e' obbligatorio al mutare delle condizioni operative o all'insorgere "
-    "di nuovi rischi. Ogni variazione logistica, tecnica o di personale dovra' essere preventivamente "
-    "comunicata al DEC, al CSE e al RSPP."
+    "Le lavorazioni costituiscono la prosecuzione, per scelta condivisa, di quelle gia' effettuate per la "
+    "pulizia del bacino dalle taccate in legno e in calcestruzzo. Ai sensi degli artt. 92, 96 e 100 del D.Lgs. "
+    "81/2008, le Ditte affidatarie ed esecutrici sono tenute ad attuare quanto previsto nel PSC, a redigere e "
+    "trasmettere il proprio POS, a partecipare alle riunioni di coordinamento indette dal CSE e a rispettare il "
+    "cronoprogramma dei lavori, il cui aggiornamento e' obbligatorio al mutare delle condizioni operative o "
+    "all'insorgere di nuovi rischi. Ogni variazione logistica, tecnica o di personale dovra' essere "
+    "preventivamente comunicata al DEC, al CSE e al RSPP."
 )
 
 # ====================================================================
