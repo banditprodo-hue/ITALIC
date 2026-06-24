@@ -478,6 +478,7 @@ M1 = [
   "b":["Testo Unico Sicurezza: D.Lgs. 9 aprile 2008, n. 81",
        "Titolo III - Uso delle attrezzature di lavoro e DPI",
        "Direttiva Macchine 2006/42/CE (recepita con D.Lgs. 17/2010)",
+       "Regolamento Macchine (UE) 2023/1230 - applicabile dal 20/01/2027",
        "Norme tecniche armonizzate (serie UNI EN ISO 12100)",
        "Obblighi di datore di lavoro, dirigenti, preposti e lavoratori"],
   "g":"Schema a piramide normativa: Direttive UE in alto, D.Lgs. 81/08 al centro, norme tecniche alla base."},
@@ -509,6 +510,30 @@ M1 = [
        "Fascicolo tecnico e manuale d'uso in lingua italiana",
        "Targa con dati identificativi del fabbricante"],
   "g":"Primo piano di una targa macchina con marcatura CE e dettaglio del manuale d'uso e manutenzione."},
+
+ {"t":"Nuovo Regolamento Macchine UE","n":"Reg. UE 2023/1230",
+  "b":["Regolamento (UE) 2023/1230 del 14 giugno 2023 sulle macchine",
+       "Abroga e sostituisce la Direttiva Macchine 2006/42/CE",
+       "In vigore dal 19 luglio 2023, applicabile dal 20 gennaio 2027",
+       "Forma di Regolamento: direttamente applicabile, senza recepimento",
+       "Adegua la sicurezza a digitalizzazione e nuove tecnologie"],
+  "g":"Timeline grafica con le date chiave (2023 adozione, 2027 piena applicazione) su fascia gialla."},
+
+ {"t":"Novita' del Regolamento Macchine","n":"Reg. UE 2023/1230",
+  "b":["Categorie di prodotti ad alto rischio (Allegato I)",
+       "Valutazione di conformita' da terzi per le categorie critiche",
+       "Istruzioni ammesse in formato digitale (cartaceo su richiesta)",
+       "Requisiti di cybersicurezza e protezione da corruzione dei dati",
+       "Macchine con intelligenza artificiale e comportamento evolutivo"],
+  "g":"Pannello con icone delle novita': alto rischio, digitale, cybersecurity, IA, in stile industriale."},
+
+ {"t":"Modifiche sostanziali e transizione","n":"Reg. UE 2023/1230",
+  "b":["Chi esegue una modifica sostanziale diventa 'fabbricante'",
+       "Nuovi obblighi di valutazione e marcatura dopo la modifica",
+       "Periodo transitorio fino al 20 gennaio 2027",
+       "Fino ad allora resta applicabile la Direttiva 2006/42/CE",
+       "Pianificare per tempo l'adeguamento del parco macchine"],
+  "g":"Schema di una macchina modificata con riavvio dell'iter di conformita' e nuova marcatura."},
 
  {"t":"Obblighi del datore di lavoro","n":"Art. 71 D.Lgs. 81/08",
   "b":["Mettere a disposizione attrezzature conformi e idonee",
@@ -1171,27 +1196,30 @@ def split_bullets(items):
 
 def main():
     slides = []
-    total = 100
+    # Totale dinamico: cover + divider M1 + contenuti M1 + divider M2 + contenuti M2 + chiusura
+    total = 1 + 1 + len(M1) + 1 + len(M2) + 1
+    no = 1
 
-    # Slide 1 - Cover (parte del Modulo 1)
+    # Cover (parte del Modulo 1)
     slides.append(slide_cover(
         title="Rischio Meccanico e Movimentazione Manuale dei Carichi",
         subtitle="Corso di formazione e informazione dei lavoratori",
-        footer="D.Lgs. 81/08 - Titolo III, Titolo VI - Direttiva Macchine 2006/42/CE",
+        footer="D.Lgs. 81/08 - Titolo III, Titolo VI - Reg. (UE) 2023/1230 / Dir. 2006/42/CE",
         kicker="SICUREZZA SUL LAVORO"))
+    no += 1
 
-    # Slide 2 - Divider Modulo 1
+    # Divider Modulo 1
     slides.append(slide_divider(
         modulo="MODULO 1",
         title="Rischio Meccanico",
-        points=["Pericoli meccanici e zone pericolose",
+        points=["Quadro normativo e nuovo Regolamento Macchine UE",
+                "Pericoli meccanici e zone pericolose",
                 "Ripari, dispositivi e interblocchi",
-                "Manutenzione in sicurezza e LOTO",
-                "DPI per il rischio meccanico"],
-        slide_no=2, total=total))
+                "Manutenzione in sicurezza, LOTO e DPI"],
+        slide_no=no, total=total))
+    no += 1
 
-    # Slide 3..60 - Contenuti Modulo 1 (58 slide)
-    no = 3
+    # Contenuti Modulo 1
     for item in M1:
         slides.append(slide_content(
             title=item["t"], norm=item.get("n", ""),
@@ -1199,7 +1227,7 @@ def main():
             footer_left=FOOT1, slide_no=no, total=total))
         no += 1
 
-    # Slide 61 - Divider Modulo 2
+    # Divider Modulo 2
     slides.append(slide_divider(
         modulo="MODULO 2",
         title="Movimentazione Manuale dei Carichi",
@@ -1207,10 +1235,10 @@ def main():
                 "Metodo NIOSH e indice di sollevamento",
                 "Limiti di peso per sesso ed eta'",
                 "Tecniche corrette e ausili meccanici"],
-        slide_no=61, total=total))
+        slide_no=no, total=total))
+    no += 1
 
-    # Slide 62..99 - Contenuti Modulo 2 (38 slide)
-    no = 62
+    # Contenuti Modulo 2
     for item in M2:
         slides.append(slide_content(
             title=item["t"], norm=item.get("n", ""),
@@ -1218,7 +1246,7 @@ def main():
             footer_left=FOOT2, slide_no=no, total=total))
         no += 1
 
-    # Slide 100 - Chiusura
+    # Chiusura
     slides.append(slide_closing(
         title="Messaggi chiave",
         points=["La sicurezza inizia dalla conoscenza dei pericoli",
