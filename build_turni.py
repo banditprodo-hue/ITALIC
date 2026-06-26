@@ -125,11 +125,11 @@ def emp_target_and_days(emp, wi, phases):
     target = 2 if is_double else 1
 
     if emp == "Caforio":
-        # non puo' Lunedi ne' Martedi
+        # turni solo Lunedi, Giovedi, Venerdi
         if is_double:
-            return 2, [WED, FRI]      # solo Mer/Ven
+            return 2, [MON, FRI]      # settimana a 2 turni -> Lun + Ven
         else:
-            return 1, [THU]           # un turno -> non Martedi quindi Giovedi
+            return 1, [THU]           # settimana a 1 turno -> Gio
     # Prota, Gigante, Donnaloia, Gaballo, Scalone -> pattern generico
     if is_double:
         return 2, DOUBLE_DAYS
@@ -674,7 +674,7 @@ notes = [
     "Non sono inclusi i santi patroni locali (citta' non specificata).",
     "Max 4 dipendenti in turno nello stesso giorno; max 2 funzionari nello stesso giorno.",
     "Settimane con DUE turni: turni di Lunedi/Mercoledi/Venerdi. Settimane con UN turno: Martedi/Giovedi.",
-    "Caforio: alterna 1/2 turni; mai Lunedi ne' Martedi (2 turni = Mer+Ven, 1 turno = Gio).",
+    "Caforio: alterna 1/2 turni; turni solo Lun/Gio/Ven (2 turni = Lun+Ven, 1 turno = Gio).",
     "Prota: alterna 1/2 turni. Amenduni: 2 turni ogni settimana. Gigante: alterna 1/2 turni.",
     "Chianura: 1 turno/settimana solo Martedi. Raffaele: 1 turno/settimana solo Giovedi.",
     "Donnaloia: alterna 1/2 turni. Gaballo: alterna 1/2 turni.",
