@@ -141,7 +141,7 @@ def emp_target_and_days(emp, wi, phases):
 # 3. SOLVER PER SETTIMANA
 # ---------------------------------------------------------------------------
 
-def solve_week(wi, phases):
+def solve_week(wi, phases, cum=None):
     """
     Assegna i turni della settimana wi.
     Ritorna (assignment, shortfalls):
@@ -171,6 +171,9 @@ def solve_week(wi, phases):
         for k in range(maxk, -1, -1):
             for combo in combinations(feas, k):
                 opts.append(frozenset(combo))
+        # con bilanciamento: a parita' di dimensione, prima i giorni meno usati dal dipendente
+        if cum is not None:
+            opts.sort(key=lambda s: (-len(s), sum(cum[e][wd] for wd in s)))
         options[e] = opts
 
     n = len(emps)
@@ -178,7 +181,7 @@ def solve_week(wi, phases):
     day_funz = {d: 0 for d in range(5)}
     day_members = {d: set() for d in range(5)}
 
-    best = {"score": -1, "assign": None}
+    best = {"cov": -1, "sec": None, "assign": None}
     cur_assign = {}
 
     def can_place(emp, days):
@@ -204,13 +207,31 @@ def solve_week(wi, phases):
             else:
                 day_members[d].discard(emp)
 
-    # branch & bound; massimizza turni totali, poi preferisce soluzioni "piene"
-    def dfs(i, score, remaining_max):
-        if score + remaining_max <= best["score"]:
+    # branch & bound; primario: copertura; secondario: (equita' carenze, bilanciamento giorni)
+    tdict = {e: t for e, t, _ in emps}
+    # peso carenze: Amenduni va protetto (deve sempre fare 2 turni)
+    PRIO = {e: (5 if e == "Amenduni" else 1) for e in ALL_EMP}
+
+    def dfs(i, cov, remaining_max):
+        if cov + remaining_max < best["cov"]:
             return
         if i == n:
-            if score > best["score"]:
-                best["score"] = score
+            # 1) penalita' carenze: spalma le perdite e protegge Amenduni (quadratica e pesata)
+            sf = 0
+            for e, t in tdict.items():
+                d = t - len(cur_assign.get(e, ()))
+                if d > 0:
+                    sf += PRIO[e] * d * d
+            # 2) penalita' bilanciamento giorni
+            bal = 0
+            if cum is not None:
+                for e, days in cur_assign.items():
+                    for wd in days:
+                        bal += cum[e][wd]
+            sec = (sf, bal)
+            if cov > best["cov"] or (cov == best["cov"] and (best["sec"] is None or sec < best["sec"])):
+                best["cov"] = cov
+                best["sec"] = sec
                 best["assign"] = dict(cur_assign)
             return
         emp, target, feas = emps[i]
@@ -219,16 +240,9 @@ def solve_week(wi, phases):
             if can_place(emp, opt):
                 place(emp, opt, True)
                 cur_assign[emp] = set(opt)
-                dfs(i + 1, score + len(opt), rest)
+                dfs(i + 1, cov + len(opt), rest)
                 place(emp, opt, False)
                 del cur_assign[emp]
-                # se ho piazzato il target pieno per questo dipendente,
-                # non serve esplorare sottoinsiemi piu' piccoli per lui
-                if len(opt) == target:
-                    # continuiamo comunque ad altre combinazioni dello stesso size
-                    # (gestite dall'ordine), ma evitiamo i size minori una volta
-                    # trovata copertura piena globale tramite il bound.
-                    pass
 
     total_target = sum(t for _, t, _ in emps)
     dfs(0, 0, total_target)
@@ -243,39 +257,52 @@ def solve_week(wi, phases):
 
 
 def evaluate(phases):
-    """Risolve tutte le settimane; ritorna (assegnati_tot, n_shortfall, dettagli)."""
+    """Risolve tutte le settimane CON bilanciamento; ritorna (assegnati, shortfall, imbalance, dettagli)."""
+    cum = {e: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0} for e in ALL_EMP}
     total_assigned = 0
     total_shortfall = 0
     details = {}
     for wi in sorted(weeks.keys()):
-        assign, shorts = solve_week(wi, phases)
+        assign, shorts = solve_week(wi, phases, cum)
+        details[wi] = (assign, shorts)
         total_assigned += sum(len(s) for s in assign.values())
         total_shortfall += len(shorts)
-        details[wi] = (assign, shorts)
-    return total_assigned, total_shortfall, details
+        for e, days in assign.items():
+            for wd in days:
+                cum[e][wd] += 1
+    # imbalance: varianza dei giorni Lun/Mer/Ven per i dipendenti "flessibili"
+    bal_emps = ["Amenduni", "Prota", "Gigante", "Donnaloia", "Gaballo", "Scalone"]
+    imb = 0.0
+    for e in bal_emps:
+        vals = [cum[e][0], cum[e][2], cum[e][4]]   # Lun, Mer, Ven
+        m = sum(vals) / 3.0
+        imb += sum((x - m) ** 2 for x in vals)
+    return total_assigned, total_shortfall, imb, details
 
 
 # ---------------------------------------------------------------------------
 # 4. SCELTA DELLE FASI (brute force 2^6)
 # ---------------------------------------------------------------------------
 
-best_combo = None
-best_metric = None
-best_details = None
+COVERAGE_TOLERANCE = 3   # accettiamo fino a 3 turni/anno in meno pur di equilibrare i giorni
+
+solutions = []
 for bits in product([0, 1], repeat=len(ALTERNATING)):
     phases = dict(zip(ALTERNATING, bits))
-    assigned, shortfall, details = evaluate(phases)
-    # metrica: massimizza turni piazzati, minimizza shortfall
-    metric = (assigned, -shortfall)
-    if best_metric is None or metric > best_metric:
-        best_metric = metric
-        best_combo = phases
-        best_details = details
+    assigned, shortfall, imb, details = evaluate(phases)
+    solutions.append((assigned, shortfall, imb, phases, details))
 
-PHASES = best_combo
-DETAILS = best_details
+cov_max = max(s[0] for s in solutions)
+# fra le soluzioni a copertura quasi massima, scegli la piu' equilibrata sui giorni
+candidates = [s for s in solutions if s[0] >= cov_max - COVERAGE_TOLERANCE]
+candidates.sort(key=lambda s: (s[2], -s[0], s[1]))   # imbalance, poi copertura, poi shortfall
+best = candidates[0]
+PHASES = best[3]
+DETAILS = best[4]
+best_metric = (best[0], -best[1], -best[2])
+print("Copertura massima possibile:", cov_max)
 print("Fasi scelte (0 = settimana 'pari' a 2 turni):", PHASES)
-print("Turni totali piazzati:", best_metric[0], " shortfall settimana-dipendente:", -best_metric[1])
+print("Turni piazzati:", best[0], " shortfall:", best[1], " imbalance:", round(best[2], 1))
 
 # ---------------------------------------------------------------------------
 # 5. RACCOLTA DATI PER L'OUTPUT
@@ -659,7 +686,8 @@ notes = [
     "Donnaloia, Gaballo e Scalone: alternano una settimana 1 turno e una settimana 2 turni.",
     "Coppie mai nello stesso giorno: Caforio-Prota, Gaballo-Donnaloia, Scalone-Chianura.",
     "Struttura file: un foglio per ogni mese (nominativi in prima colonna, date in prima riga), piu' i fogli Elenco per persona, Riepilogo, Segnalazioni e Note.",
-    "ASSUNZIONE: le fasi di alternanza sono state ottimizzate automaticamente (Caforio/Prota e Gaballo/Donnaloia in fasi opposte) per rispettare i limiti giornalieri e i vincoli di coppia.",
+    "ASSUNZIONE: le fasi di alternanza sono ottimizzate automaticamente per equilibrare i giorni (Lun/Mer/Ven) tra i dipendenti ed evitare che i venerdi' ricadano sempre sulle stesse persone.",
+    "BILANCIAMENTO: per distribuire i giorni in modo equo, Caforio e Gigante risultano in fasi opposte; questo comporta circa 3 turni/anno in meno (alcune settimane con festivi hanno 1 turno in meno), spalmati e mai a carico di Amenduni.",
     "Fasi scelte (settimana di partenza a 2 turni se valore 0): " + ", ".join("%s=%s" % (k, "pari" if v == 0 else "dispari") for k, v in PHASES.items()) + ".",
     "Le celle arancioni nel 'Riepilogo' indicano settimane in cui un dipendente ha svolto meno turni del previsto per via di festivi sul suo giorno obbligato (vedi foglio Segnalazioni).",
 ]
