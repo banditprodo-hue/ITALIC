@@ -345,6 +345,7 @@ class Sheet:
         self.colwidths = {}   # col -> width
         self.maxc = 0
         self.maxr = 0
+        self.freeze = None    # (rows_frozen, cols_frozen)
 
     def set(self, r, c, value, style=0, number=False):
         self.rows.setdefault(r, {})[c] = (value, style, number)
@@ -362,6 +363,13 @@ def sheet_xml(sh):
     parts = []
     parts.append('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
     parts.append('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">')
+    if sh.freeze:
+        fr, fc = sh.freeze
+        topleft = "%s%d" % (col_letter(fc + 1), fr + 1)
+        parts.append('<sheetViews><sheetView workbookViewId="0">'
+                     '<pane xSplit="%d" ySplit="%d" topLeftCell="%s" activePane="bottomRight" state="frozen"/>'
+                     '<selection pane="bottomRight" activeCell="%s" sqref="%s"/>'
+                     '</sheetView></sheetViews>' % (fc, fr, topleft, topleft, topleft))
     if sh.colwidths:
         parts.append('<cols>')
         for c, w in sorted(sh.colwidths.items()):
@@ -465,60 +473,127 @@ STYLES_XML = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 # ---- costruzione fogli ------------------------------------------------------
 
-# Foglio 1: Turni (calendario giornaliero)
+# Foglio 1: Turni - DIPENDENTI IN RIGA, date in colonna (organizzato per persona)
+MONTHS_IT = ["", "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+             "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
+WD2 = ["LU", "MA", "ME", "GI", "VE", "SA", "DO"]
+
+# totali per persona e per giorno
+ptot = {e: 0 for e in ALL_EMP}
+for d in WORKING_DATES:
+    for e in day_assignment[d]:
+        ptot[e] += 1
+
 s1 = Sheet("Turni")
-s1.set(1, 1, "TURNAZIONE PERSONALE - 01/09/2026 / 31/08/2027", S_TITLE)
-s1.merge(1, 1, 1, 4 + len(ALL_EMP))
+ndates = len(WORKING_DATES)
+dcol = {d: 2 + i for i, d in enumerate(WORKING_DATES)}
+tot_col = 2 + ndates
 
-# header
-hdr_row = 3
-s1.set(hdr_row, 1, "Data", S_HDR)
-s1.set(hdr_row, 2, "Giorno", S_HDR)
-col = 3
-emp_col = {}
-for e in FUNZIONARI:
-    s1.set(hdr_row, col, e, S_HDR_FUNZ)
-    emp_col[e] = col
-    col += 1
-for e in ASSISTENTI:
-    s1.set(hdr_row, col, e, S_HDR_ASS)
-    emp_col[e] = col
-    col += 1
-col_tot = col
-s1.set(hdr_row, col_tot, "Tot", S_HDR)
-col_totf = col + 1
-s1.set(hdr_row, col_totf, "Tot Funz.", S_HDR)
+R_TITLE, R_MONTH, R_DAY, R_WD = 1, 2, 3, 4
+first_emp_row = 5
 
-# righe = TUTTI i giorni (compresi non lavorativi) per chiarezza calendario
-r = hdr_row + 1
-for d in ALL_DATES:
-    reason = reason_excluded(d)
-    s1.set(r, 1, d.strftime("%d/%m/%Y"), S_DATE)
-    s1.set(r, 2, WD_NAMES[d.weekday()], S_DAY)
-    if reason is not None:
-        # giorno non lavorativo: marca motivo a cavallo delle colonne dipendenti
-        s1.set(r, 3, reason, S_NA)
-        s1.merge(r, 3, r, col_totf)
-        r += 1
-        continue
-    members = set(day_assignment[d])
-    for e in ALL_EMP:
-        c = emp_col[e]
-        if e in members:
+s1.set(R_TITLE, 1, "TURNAZIONE PERSONALE PER DIPENDENTE - 01/09/2026 / 31/08/2027", S_TITLE)
+s1.merge(R_TITLE, 1, R_TITLE, tot_col)
+
+# colonna 1 = etichetta "Dipendente" (unione righe intestazione)
+s1.set(R_MONTH, 1, "Dipendente", S_HDR)
+s1.merge(R_MONTH, 1, R_WD, 1)
+# colonna totale
+s1.set(R_MONTH, tot_col, "Tot", S_HDR)
+s1.merge(R_MONTH, tot_col, R_WD, tot_col)
+
+# intestazione mesi (merge), giorno del mese e sigla giorno settimana
+run_start = None
+run_key = None
+for i, d in enumerate(WORKING_DATES):
+    c = dcol[d]
+    key = (d.year, d.month)
+    if run_key is None:
+        run_key, run_start = key, c
+    elif key != run_key:
+        s1.set(R_MONTH, run_start, "%s %d" % (MONTHS_IT[run_key[1]], run_key[0]), S_HDR)
+        if c - 1 > run_start:
+            s1.merge(R_MONTH, run_start, R_MONTH, c - 1)
+        run_key, run_start = key, c
+    s1.set(R_DAY, c, "%02d" % d.day, S_HDR)
+    s1.set(R_WD, c, WD2[d.weekday()], S_HDR)
+# ultimo mese
+last_c = dcol[WORKING_DATES[-1]]
+s1.set(R_MONTH, run_start, "%s %d" % (MONTHS_IT[run_key[1]], run_key[0]), S_HDR)
+if last_c > run_start:
+    s1.merge(R_MONTH, run_start, R_MONTH, last_c)
+
+# righe = dipendenti (Funzionari poi Assistenti)
+r = first_emp_row
+emp_row = {}
+for e in ALL_EMP:
+    emp_row[e] = r
+    lab_style = S_HDR_FUNZ if GROUP[e] == "Funzionari" else S_HDR_ASS
+    s1.set(r, 1, e, lab_style)
+    for d in WORKING_DATES:
+        c = dcol[d]
+        if e in day_assignment[d]:
             s1.set(r, c, "X", S_X_FUNZ if GROUP[e] == "Funzionari" else S_X_ASS)
         else:
             s1.set(r, c, "", S_CELL)
-    nf = sum(1 for e in members if GROUP[e] == "Funzionari")
-    s1.set(r, col_tot, len(members), S_NUM, number=True)
-    s1.set(r, col_totf, nf, S_NUM, number=True)
+    s1.set(r, tot_col, ptot[e], S_NUM, number=True)
     r += 1
 
-s1.width(1, 12)
-s1.width(2, 11)
-for e in ALL_EMP:
-    s1.width(emp_col[e], 11)
-s1.width(col_tot, 6)
-s1.width(col_totf, 9)
+# righe totali per giorno
+row_totd = r
+row_totf = r + 1
+s1.set(row_totd, 1, "Tot / giorno", S_HDR)
+s1.set(row_totf, 1, "Tot funzionari / giorno", S_HDR)
+for d in WORKING_DATES:
+    c = dcol[d]
+    members = day_assignment[d]
+    nf = sum(1 for e in members if GROUP[e] == "Funzionari")
+    s1.set(row_totd, c, len(members), S_NUM, number=True)
+    s1.set(row_totf, c, nf, S_NUM, number=True)
+s1.set(row_totd, tot_col, sum(ptot.values()), S_NUM, number=True)
+
+s1.width(1, 22)
+for d in WORKING_DATES:
+    s1.width(dcol[d], 4)
+s1.width(tot_col, 6)
+s1.freeze = (R_WD, 1)   # blocca intestazioni (4 righe) e colonna dipendente
+
+# Foglio 2: Elenco per persona (formato lista ordinato per dipendente)
+order_idx = {e: i for i, e in enumerate(FUNZIONARI)}
+order_idx.update({e: i for i, e in enumerate(ASSISTENTI)})
+shifts = []
+for d in WORKING_DATES:
+    for e in day_assignment[d]:
+        shifts.append((e, d))
+shifts.sort(key=lambda x: (0 if GROUP[x[0]] == "Funzionari" else 1, order_idx[x[0]], x[1]))
+
+sE = Sheet("Elenco per persona")
+sE.set(1, 1, "ELENCO TURNI ORDINATO PER DIPENDENTE", S_TITLE)
+sE.merge(1, 1, 1, 6)
+hr = 3
+sE.set(hr, 1, "Gruppo", S_HDR)
+sE.set(hr, 2, "Dipendente", S_HDR)
+sE.set(hr, 3, "N.", S_HDR)
+sE.set(hr, 4, "Data", S_HDR)
+sE.set(hr, 5, "Giorno", S_HDR)
+sE.set(hr, 6, "Turni nella settimana", S_HDR)
+rr = hr + 1
+counter = {}
+for e, d in shifts:
+    counter[e] = counter.get(e, 0) + 1
+    wi = week_index[monday_of(d)]
+    wk = weekly_counts.get(wi, {}).get(e, 0)
+    lab_style = S_HDR_FUNZ if GROUP[e] == "Funzionari" else S_HDR_ASS
+    sE.set(rr, 1, GROUP[e], S_CELL)
+    sE.set(rr, 2, e, lab_style)
+    sE.set(rr, 3, counter[e], S_NUM, number=True)
+    sE.set(rr, 4, d.strftime("%d/%m/%Y"), S_DATE)
+    sE.set(rr, 5, WD_NAMES[d.weekday()], S_DAY)
+    sE.set(rr, 6, wk, S_NUM, number=True)
+    rr += 1
+sE.width(1, 12); sE.width(2, 13); sE.width(3, 5)
+sE.width(4, 12); sE.width(5, 11); sE.width(6, 20)
+sE.freeze = (hr, 0)
 
 # Foglio 2: Riepilogo settimanale
 s2 = Sheet("Riepilogo")
@@ -618,7 +693,7 @@ s4.width(1, 20)
 for k in range(2, 9):
     s4.width(k, 14)
 
-SHEETS = [s1, s2, s3, s4]
+SHEETS = [s1, sE, s2, s3, s4]
 
 # ---- pacchetto xlsx ---------------------------------------------------------
 
