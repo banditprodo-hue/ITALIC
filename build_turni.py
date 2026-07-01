@@ -101,6 +101,8 @@ FORBIDDEN_PAIRS = [
 
 # Dipendenti ad alternanza (1 turno / 2 turni). La fase viene scelta dal solver.
 ALTERNATING = ["Caforio", "Prota", "Gigante", "Donnaloia", "Gaballo", "Scalone"]
+# Variabili di fase da ottimizzare: alternanze + fase dei giorni di Amenduni
+PHASE_VARS = ALTERNATING + ["AmenduniDay"]
 
 # Scalone non ha regola specifica nella richiesta -> assunzione documentata.
 SCALONE_ASSUMPTION = True
@@ -111,9 +113,12 @@ def emp_target_and_days(emp, wi, phases):
     Ritorna (target_turni, [weekday ammessi]) per dipendente/settimana.
     target 0 significa che il dipendente non e' in turnazione quella settimana.
     """
-    # Dipendenti fissi
+    # Amenduni: sempre 2 turni, ma i giorni alternano Lun+Mer / Lun+Ven
     if emp == "Amenduni":
-        return 2, DOUBLE_DAYS
+        dphase = phases.get("AmenduniDay", 0)
+        if (wi + dphase) % 2 == 0:
+            return 2, [MON, WED]     # settimana A: Lunedi + Mercoledi
+        return 2, [MON, FRI]         # settimana B: Lunedi + Venerdi
     if emp == "Chianura":
         return 1, [TUE]          # un turno a settimana, solo Martedi
     if emp == "Raffaele":
@@ -222,13 +227,20 @@ def solve_week(wi, phases, cum=None):
                 d = t - len(cur_assign.get(e, ()))
                 if d > 0:
                     sf += PRIO[e] * d * d
-            # 2) penalita' bilanciamento giorni
+            # 2) copertura funzionari: vogliamo 2 funzionari per giorno lavorativo
+            wf = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+            for e, days in cur_assign.items():
+                if GROUP[e] == "Funzionari":
+                    for wd in days:
+                        wf[wd] += 1
+            fp = sum((2 - wf[wd]) ** 2 for wd in avail_days)
+            # 3) penalita' bilanciamento giorni
             bal = 0
             if cum is not None:
                 for e, days in cur_assign.items():
                     for wd in days:
                         bal += cum[e][wd]
-            sec = (sf, bal)
+            sec = (sf, fp, bal)
             if cov > best["cov"] or (cov == best["cov"] and (best["sec"] is None or sec < best["sec"])):
                 best["cov"] = cov
                 best["sec"] = sec
@@ -257,7 +269,7 @@ def solve_week(wi, phases, cum=None):
 
 
 def evaluate(phases):
-    """Risolve tutte le settimane CON bilanciamento; ritorna (assegnati, shortfall, imbalance, dettagli)."""
+    """Risolve tutte le settimane; ritorna (assegnati, shortfall, funz_pen, imbalance, dettagli)."""
     cum = {e: {0: 0, 1: 0, 2: 0, 3: 0, 4: 0} for e in ALL_EMP}
     total_assigned = 0
     total_shortfall = 0
@@ -270,39 +282,52 @@ def evaluate(phases):
         for e, days in assign.items():
             for wd in days:
                 cum[e][wd] += 1
+    # copertura funzionari: quanto ci discostiamo da 2 funzionari/giorno (sui giorni lavorativi)
+    funz_pen = 0
+    for wi in weeks:
+        assign = details[wi][0]
+        wf = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
+        for e, days in assign.items():
+            if GROUP[e] == "Funzionari":
+                for wd in days:
+                    wf[wd] += 1
+        for wd in weeks[wi]:            # solo giorni lavorativi
+            funz_pen += (2 - wf[wd]) ** 2
     # imbalance: varianza dei giorni Lun/Mer/Ven per i dipendenti "flessibili"
-    bal_emps = ["Amenduni", "Prota", "Gigante", "Donnaloia", "Gaballo", "Scalone"]
+    bal_emps = ["Prota", "Gigante", "Donnaloia", "Gaballo", "Scalone"]
     imb = 0.0
     for e in bal_emps:
         vals = [cum[e][0], cum[e][2], cum[e][4]]   # Lun, Mer, Ven
         m = sum(vals) / 3.0
         imb += sum((x - m) ** 2 for x in vals)
-    return total_assigned, total_shortfall, imb, details
+    return total_assigned, total_shortfall, funz_pen, imb, details
 
 
 # ---------------------------------------------------------------------------
-# 4. SCELTA DELLE FASI (brute force 2^6)
+# 4. SCELTA DELLE FASI (brute force)
 # ---------------------------------------------------------------------------
 
-COVERAGE_TOLERANCE = 3   # accettiamo fino a 3 turni/anno in meno pur di equilibrare i giorni
+COVERAGE_TOLERANCE = 3   # accettiamo fino a 3 turni/anno in meno
 
 solutions = []
-for bits in product([0, 1], repeat=len(ALTERNATING)):
-    phases = dict(zip(ALTERNATING, bits))
-    assigned, shortfall, imb, details = evaluate(phases)
-    solutions.append((assigned, shortfall, imb, phases, details))
+for bits in product([0, 1], repeat=len(PHASE_VARS)):
+    phases = dict(zip(PHASE_VARS, bits))
+    assigned, shortfall, funz_pen, imb, details = evaluate(phases)
+    solutions.append((assigned, shortfall, funz_pen, imb, phases, details))
 
 cov_max = max(s[0] for s in solutions)
-# fra le soluzioni a copertura quasi massima, scegli la piu' equilibrata sui giorni
+# fra le soluzioni a copertura quasi massima: prima massima copertura funzionari (2/giorno),
+# poi giorni piu' equilibrati
 candidates = [s for s in solutions if s[0] >= cov_max - COVERAGE_TOLERANCE]
-candidates.sort(key=lambda s: (s[2], -s[0], s[1]))   # imbalance, poi copertura, poi shortfall
+candidates.sort(key=lambda s: (s[2], s[3], -s[0], s[1]))   # funz_pen, imbalance, copertura, shortfall
 best = candidates[0]
-PHASES = best[3]
-DETAILS = best[4]
-best_metric = (best[0], -best[1], -best[2])
+PHASES = best[4]
+DETAILS = best[5]
+best_metric = (best[0], -best[1], -best[3])
 print("Copertura massima possibile:", cov_max)
-print("Fasi scelte (0 = settimana 'pari' a 2 turni):", PHASES)
-print("Turni piazzati:", best[0], " shortfall:", best[1], " imbalance:", round(best[2], 1))
+print("Fasi scelte:", PHASES)
+print("Turni piazzati:", best[0], " shortfall:", best[1],
+      " funz_pen:", best[2], " imbalance:", round(best[3], 1))
 
 # ---------------------------------------------------------------------------
 # 5. RACCOLTA DATI PER L'OUTPUT
@@ -351,6 +376,17 @@ for d in WORKING_DATES:
 
 if not warnings:
     warnings.append("Nessuna criticita': tutte le regole sono applicate per ogni settimana e giorno.")
+
+# Copertura funzionari: verifica del vincolo "sempre 2 funzionari"
+_fz = {0: 0, 1: 0, 2: 0}
+for d in WORKING_DATES:
+    nf = sum(1 for e in day_assignment[d] if GROUP[e] == "Funzionari")
+    _fz[nf] = _fz.get(nf, 0) + 1
+if _fz.get(0, 0) or _fz.get(1, 0):
+    warnings.insert(0,
+        "IMPOSSIBILE avere SEMPRE 2 funzionari ogni giorno: con soli 4 funzionari il massimo e' 8 turni/settimana contro i 10 necessari (2 x 5 giorni). "
+        "Risultato: %d giorni con 2 funzionari, %d giorni con 1, %d giorni con 0 (i cali sono su Martedi/Giovedi, giorni in cui lavorano solo i funzionari a 'un turno'). "
+        "I 2 funzionari sono garantiti quasi sempre su Lun/Mer/Ven." % (_fz.get(2, 0), _fz.get(1, 0), _fz.get(0, 0)))
 
 # ---------------------------------------------------------------------------
 # 6. SCRITTURA XLSX (senza dipendenze)
@@ -678,10 +714,10 @@ notes = [
         "%s (%s)" % (d.strftime("%d/%m/%Y"), n) for d, n in sorted(ITALIAN_HOLIDAYS.items())
     ) + ".",
     "Non sono inclusi i santi patroni locali (citta' non specificata).",
-    "Max 4 dipendenti in turno nello stesso giorno; max 2 funzionari nello stesso giorno.",
+    "Max 4 dipendenti in turno nello stesso giorno; si punta a 2 funzionari/giorno (garantiti su Lun/Mer/Ven; su Mar/Gio non sempre possibile - vedi Segnalazioni).",
     "Settimane con DUE turni: turni di Lunedi/Mercoledi/Venerdi. Settimane con UN turno: Martedi/Giovedi.",
     "Caforio: alterna 1/2 turni; turni solo Lun/Gio/Ven (2 turni = Lun+Ven, 1 turno = Gio).",
-    "Prota: alterna 1/2 turni. Amenduni: 2 turni ogni settimana. Gigante: alterna 1/2 turni.",
+    "Prota: alterna 1/2 turni. Amenduni: 2 turni ogni settimana alternando Lun+Mer e Lun+Ven. Gigante: alterna 1/2 turni.",
     "Chianura: 1 turno/settimana solo Martedi. Raffaele: 1 turno/settimana solo Giovedi.",
     "Donnaloia, Gaballo e Scalone: alternano una settimana 1 turno e una settimana 2 turni.",
     "Coppie mai nello stesso giorno: Caforio-Prota, Gaballo-Donnaloia, Scalone-Chianura.",
